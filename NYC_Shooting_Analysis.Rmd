@@ -1,0 +1,208 @@
+---
+title: "NYC_Shooting_Analysis.Rmd"
+date: "`r Sys.Date()`"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+# Introduction
+
+This document analyzes the NYC Shooting Incidents dataset to uncover patterns and insights - specifically, looking into factors such as incidents per borough, time of day, and age of the people affected. 
+The source of this data is the City of New York website.
+
+## Dataset Description
+
+The dataset includes details about each shooting incident such as date, time, location, and victim demographics. 3 visualisations have been included, and 1 model. 
+
+```{r setup, include=TRUE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# Load necessary libraries
+library(tidyverse)
+library(lubridate)
+
+# Create Data directory if it doesn't exist
+if(!file.exists("Data")) {dir.create("Data")}
+
+# Load the dataset
+data_url <- "https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv?accessType=DOWNLOAD"
+data_path <- "Data/NYPD_Shooting_Incident_Data_Historic.csv"
+if(!file.exists(data_path)) {
+  download.file(data_url, destfile = data_path)
+}
+shooting_data <- read_csv(data_path)
+
+# Convert columns to appropriate types
+shooting_data <- shooting_data %>%
+  mutate(
+    OCCUR_DATE = mdy(OCCUR_DATE),
+    BORO = as.factor(BORO),
+    PRECINCT = as.factor(PRECINCT),
+    JURISDICTION_CODE = as.factor(JURISDICTION_CODE),
+    STATISTICAL_MURDER_FLAG = as.factor(STATISTICAL_MURDER_FLAG),
+    PERP_AGE_GROUP = as.factor(PERP_AGE_GROUP),
+    PERP_SEX = as.factor(PERP_SEX),
+    PERP_RACE = as.factor(PERP_RACE),
+    VIC_AGE_GROUP = as.factor(VIC_AGE_GROUP),
+    VIC_SEX = as.factor(VIC_SEX),
+    VIC_RACE = as.factor(VIC_RACE)
+  )
+
+# Remove unnecessary columns
+shooting_data <- shooting_data %>%
+  select(-X_COORD_CD, -Y_COORD_CD, -Latitude, -Longitude)
+
+# Load the dataset
+data_url <- "https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv?accessType=DOWNLOAD"
+data_path <- "Data/NYPD_Shooting_Incident_Data_Historic.csv"
+if(!file.exists(data_path)) {
+  download.file(data_url, destfile = data_path)
+}
+shooting_data <- read_csv(data_path)
+
+# Convert columns to appropriate types
+shooting_data <- shooting_data %>%
+  mutate(
+    OCCUR_DATE = mdy(OCCUR_DATE),
+    BORO = as.factor(BORO),
+    PRECINCT = as.factor(PRECINCT),
+    JURISDICTION_CODE = as.factor(JURISDICTION_CODE),
+    STATISTICAL_MURDER_FLAG = as.factor(STATISTICAL_MURDER_FLAG),
+    PERP_AGE_GROUP = as.factor(PERP_AGE_GROUP),
+    PERP_SEX = as.factor(PERP_SEX),
+    PERP_RACE = as.factor(PERP_RACE),
+    VIC_AGE_GROUP = as.factor(VIC_AGE_GROUP),
+    VIC_SEX = as.factor(VIC_SEX),
+    VIC_RACE = as.factor(VIC_RACE)
+  )
+
+# Remove unnecessary columns
+shooting_data <- shooting_data %>%
+  select(-X_COORD_CD, -Y_COORD_CD, -Latitude, -Longitude)
+
+# Display the first few rows of the dataset
+head(shooting_data)
+
+# Summary of the dataset
+dataset_summary <- summary(shooting_data)
+print(dataset_summary)
+
+# Check for missing data
+missing_data_summary <- sapply(shooting_data, function(x) sum(is.na(x)))
+print(missing_data_summary)
+
+# Handle missing data
+# Removing rows with missing values for simplicity
+shooting_data <- shooting_data %>%
+  drop_na()
+
+# Summary of the cleaned dataset
+cleaned_dataset_summary <- summary(shooting_data)
+print(cleaned_dataset_summary)
+
+# Extract the hour from the OCCUR_TIME column
+shooting_data <- shooting_data %>%
+  mutate(HOUR = hour(OCCUR_TIME))
+
+# Visualization of incidents by time of day
+time_data <- shooting_data %>%
+  group_by(HOUR) %>%
+  summarize(total_incidents = n())
+
+ggplot(time_data, aes(x = HOUR, y = total_incidents)) +
+  geom_line(color = "blue") +
+  labs(title = "Shooting Incidents by Time of Day",
+       x = "Hour of Day",
+       y = "Total Incidents") +
+  theme_minimal()
+
+
+# Visualization of incidents by borough
+borough_data <- shooting_data %>%
+  group_by(BORO) %>%
+  summarize(total_incidents = n())
+
+ggplot(borough_data, aes(x = BORO, y = total_incidents, fill = BORO)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Shooting Incidents by Borough in NYC",
+       x = "Borough",
+       y = "Total Incidents") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+# Visualization of incidents by perpetrator age group
+perp_age_data <- shooting_data %>%
+  group_by(PERP_AGE_GROUP) %>%
+  summarize(total_incidents = n())
+
+ggplot(perp_age_data, aes(x = PERP_AGE_GROUP, y = total_incidents, fill = PERP_AGE_GROUP)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Shooting Incidents by Perpetrator Age Group",
+       x = "Perpetrator Age Group",
+       y = "Total Incidents") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+
+# Prepare data for the model
+shooting_data <- shooting_data %>%
+  mutate(MONTH = month(OCCUR_DATE, label = TRUE))
+
+model_data <- shooting_data %>%
+  group_by(MONTH) %>%
+  summarize(total_incidents = n())
+
+# Fit a simple linear regression model
+simple_lm_month <- lm(total_incidents ~ as.numeric(MONTH), data = model_data)
+
+# Summary of the model
+summary(simple_lm_month)
+
+# Predict using the model
+model_data$predicted_incidents <- predict(simple_lm_month, newdata = model_data)
+
+# Plot actual vs predicted incidents
+plot(as.numeric(model_data$MONTH), model_data$total_incidents, main = "Actual vs Predicted Incidents by Month",
+     xlab = "Month", ylab = "Total Incidents", pch = 19, col = "blue", xaxt = "n")
+axis(1, at = 1:12, labels = levels(model_data$MONTH))
+lines(as.numeric(model_data$MONTH), model_data$predicted_incidents, col = "red", lwd = 2)
+legend("topright", legend = c("Actual", "Predicted"), col = c("blue", "red"), pch = 19, lty = 1)
+
+```
+
+### Analysis
+
+#### Analysis of Incidents by Time of Day:
+- Shooting incidents tend to peak in the late evening and early morning hours.
+- There is a noticeable increase in incidents around 8 PM and another peak around 12 AM to 2 AM.
+- This pattern suggests that late evening and early morning hours are the most critical times for law enforcement presence and community interventions to prevent shootings.
+
+#### Analysis of Incidents by Borough:
+- The visualization shows that Brooklyn and the Bronx have the highest number of shooting incidents.
+- Staten Island has the lowest number of incidents, indicating a possible area with fewer gun-related crimes - the reasons for this could be investigated. 
+- Understanding the distribution of incidents by borough can help provide direction to groups who are looking to assist with the problem. It could also offer government a reason to look into these areas and understand why they lead to more incidents.
+
+#### Analysis of Incidents by Perpetrator Age Group:
+- The visualization shows that the age groups 18-24 and 25-44 have the highest number of perpetrators involved in shooting incidents.
+- There are significantly fewer incidents involving perpetrators under 18 and over 45.
+- This insight indicates that young adults are the most likely to be involved in shootings, which could be for a variety of factors that could be looked into.
+
+### Analysis of Linear Regression Model by Month
+
+- **Summary**: This is a very simple linear regression model that attempts to predict the total number of incidents based on the month. This could be useful for future years when looking to allocate resources that can help with the incidents. 
+- **Pattern**: The model's predictions (red line) do not closely follow the actual incidents (blue points). This indicates a poor fit, with the linear model unable to capture the seasonal variation. The red line suggests a slight downward trend in incidents over the months, but the actual data points show significant fluctuations, particularly peaking in summertime. Therefore a more complex model could perhaps provide more helpful data and taking into account patterns over several years could further validate it. Furthermore, the model does not take into account several other factors such as socio-economic conditions, the weather, and other events. 
+
+
+### Conclusion
+
+In this analysis of the NYC Shooting Incidents dataset, I cleaned and transformed the data, then visualised and analysed the results.
+
+
+#### Potential Sources of Bias:
+- **Data Collection Bias:** The data might underreport incidents in certain areas due to socio-economic factors or variations in police reporting practices which affect the end dataset.
+- **Measurement Bias:** There could be errors in recording dates, times, or locations of incidents and there is limited information about recording practices. 
+- **Variable Selection Bias:** Focusing only on recorded shootings may exclude other related incidents (e.g., threats, near misses), and these could provide important context. 
+
+#### Mitigation of Personal Bias:
+To mitigate personal bias, I have followed a data-driven approach. By analyzing different demographic aspects and time trends, multiple perspectives have been considered. The use of statistical models helps provide an objective basis for conclusions however an important step forwards would be to utilise more complex models to analyse this data. Furthermore, investigating the data collection practices would be of great value in the context of such reporting because this topic can lead to frequent misreporting due to a variety of mixed incentives and complexities. 
